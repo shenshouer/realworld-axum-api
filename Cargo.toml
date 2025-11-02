@@ -1,0 +1,45 @@
+[package]
+name = "realworld-axum-api"
+version = "0.1.0"
+edition = "2024"
+
+
+[lib]
+name = "realworld_axum_api"
+path = "src/lib.rs"
+
+[[bin]]
+name = "realworld-axum-api"
+path = "src/main.rs"
+
+[dependencies]
+# Core web framework
+axum = { version = "0.8", features = ["macros"] }
+tokio = { version = "1.0", features = ["full"] }
+
+# Database
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "migrate"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Validation
+validator = { version = "0.18", features = ["derive"] }
+
+# UUID and time
+uuid = { version = "1.0", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+# Configuration
+dotenvy = "0.15"
+
+# Add these to your existing dependencies
+bcrypt = "0.15"
+jsonwebtoken = "9.0"
+async-trait = "0.1"
+
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+lettre = { version = "0.11", features = ["tokio1-native-tls", "builder", "hostname"] }
