@@ -5,7 +5,6 @@ use axum::{
 use std::env;
 use tower_http::trace::TraceLayer;
 use tracing::info;
-use tracing_subscriber::EnvFilter;
 
 use realworld_axum_api::{
     errors::AppError,
@@ -13,6 +12,7 @@ use realworld_axum_api::{
         current_user, forgot_password, health_check, login, logout, refresh_token, register,
         reset_password, verify_email,
     },
+    otlp,
     state::AppState,
     views::{greeting_handler, index_handler, start_handler},
 };
@@ -20,13 +20,9 @@ use realworld_axum_api::{
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     dotenvy::dotenv().ok();
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env()
-                .or_else(|_| EnvFilter::try_new("realworld_axum_api=info,tower_http=warn"))
-                .unwrap(),
-        )
-        .init();
+    let endpoint = "http://localhost:5081";
+    let logger_level = "info";
+    otlp::init_tracing(logger_level, endpoint);
 
     let database_url =
         env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env file or environment");

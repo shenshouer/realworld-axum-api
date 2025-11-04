@@ -39,13 +39,21 @@ bcrypt = "0.15"
 jsonwebtoken = "9.0"
 async-trait = "0.1"
 
-tracing = "0.1"
+tracing = { version = "0.1", features = ["log"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-opentelemetry = "0.32"
+tracing-error = "0.2"
 
 lettre = { version = "0.11", features = ["tokio1-native-tls", "builder", "hostname"] }
 askama = "0.14"
 tower-http = { version = "0.6", features = ["trace"] }
 thiserror = "2.0.17"
 strum = { version = "0.27", features = ["derive"] }
-displaydoc = "0.2.5"
-pretty-error-debug = "0.3.2"
+displaydoc = "0.2"
+pretty-error-debug = "0.3"
+opentelemetry = "0.31"
+opentelemetry-otlp = { version = "0.31", features = ["grpc-tonic"] }
+opentelemetry_sdk = "0.31"
+opentelemetry-appender-tracing = "0.31"
+smallvec = "1.15.1"
+tonic = "0.14.2"

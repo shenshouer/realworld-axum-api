@@ -2,6 +2,7 @@ pub mod auth;
 pub mod errors;
 pub mod handlers;
 pub mod models;
+pub mod otlp;
 pub mod repositories;
 pub mod schemas;
 pub mod services;

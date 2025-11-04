@@ -7,8 +7,6 @@ use serde::Deserialize;
 
 use crate::errors::{AppError, Lang};
 
-pub mod home;
-
 pub async fn start_handler() -> Redirect {
     Redirect::temporary("/en/index.html")
 }
