@@ -46,7 +46,8 @@ tracing-error = "0.2"
 
 lettre = { version = "0.11", features = ["tokio1-native-tls", "builder", "hostname"] }
 askama = "0.14"
-tower-http = { version = "0.6", features = ["trace"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["trace", "compression-gzip", "compression-br", "cors", "sensitive-headers"] }
 thiserror = "2.0.17"
 strum = { version = "0.27", features = ["derive"] }
 displaydoc = "0.2"

@@ -5,7 +5,7 @@ use lettre::{
     message::{Mailbox, header::ContentType},
     transport::smtp::authentication::Credentials,
 };
-use tracing::info;
+use tracing::{info, instrument};
 
 pub struct EmailService {
     mailer: SmtpTransport,
@@ -35,6 +35,7 @@ impl EmailService {
         Ok(Self { mailer, from_email })
     }
 
+    #[instrument(skip(self, verification_token))]
     pub async fn send_verification_email(
         &self,
         to_email: &str,
@@ -96,6 +97,7 @@ impl EmailService {
         Ok(())
     }
 
+    #[instrument(skip(self))]
     pub async fn send_password_reset_email(
         &self,
         to_email: &str,
@@ -170,6 +172,7 @@ impl EmailService {
         Ok(())
     }
 
+    #[instrument(skip(self))]
     pub async fn send_security_alert(
         &self,
         to_email: &str,

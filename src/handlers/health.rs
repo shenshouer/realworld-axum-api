@@ -7,7 +7,6 @@ use crate::state::AppState;
 #[instrument(skip(state))]
 pub async fn health_check(State(state): State<AppState>) -> Json<Value> {
     info!("health_check");
-    error!("health_check");
     match sqlx::query("SELECT 1").execute(&state.db).await {
         Ok(_) => Json(json!({
             "status": "ok",

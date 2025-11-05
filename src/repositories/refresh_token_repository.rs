@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use chrono::Utc;
 use sqlx::PgPool;
+use tracing::instrument;
 use uuid::Uuid;
 
 use super::traits::RefreshTokenRepositoryTrait;
@@ -19,6 +20,7 @@ impl RefreshTokenRepository {
 
 #[async_trait]
 impl RefreshTokenRepositoryTrait for RefreshTokenRepository {
+    #[instrument(skip(self))]
     async fn create_token(&self, user_id: Uuid, token: &str) -> Result<RefreshToken, sqlx::Error> {
         let refresh_token = sqlx::query_as::<_, RefreshToken>(
             r#"
@@ -35,6 +37,7 @@ impl RefreshTokenRepositoryTrait for RefreshTokenRepository {
         Ok(refresh_token)
     }
 
+    #[instrument(skip(self))]
     async fn find_by_token(&self, token: &str) -> Result<Option<RefreshToken>, sqlx::Error> {
         let refresh_token = sqlx::query_as::<_, RefreshToken>(
             r#"
@@ -50,6 +53,7 @@ impl RefreshTokenRepositoryTrait for RefreshTokenRepository {
         Ok(refresh_token)
     }
 
+    #[instrument(skip(self))]
     async fn update_last_used(&self, token: &str) -> Result<(), sqlx::Error> {
         sqlx::query(
             r#"
@@ -66,6 +70,7 @@ impl RefreshTokenRepositoryTrait for RefreshTokenRepository {
         Ok(())
     }
 
+    #[instrument(skip(self))]
     async fn delete_token(&self, token: &str) -> Result<(), sqlx::Error> {
         sqlx::query(
             r#"
@@ -80,6 +85,7 @@ impl RefreshTokenRepositoryTrait for RefreshTokenRepository {
         Ok(())
     }
 
+    #[instrument(skip(self))]
     async fn delete_all_user_tokens(&self, user_id: Uuid) -> Result<(), sqlx::Error> {
         sqlx::query(
             r#"
@@ -94,6 +100,7 @@ impl RefreshTokenRepositoryTrait for RefreshTokenRepository {
         Ok(())
     }
 
+    #[instrument(skip(self))]
     async fn mark_token_as_used(&self, token: &str) -> Result<(), sqlx::Error> {
         sqlx::query(
             r#"

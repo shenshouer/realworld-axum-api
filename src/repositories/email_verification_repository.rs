@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
+use tracing::instrument;
 use uuid::Uuid;
 
 use super::traits::EmailVerificationRepositoryTrait;
@@ -19,6 +20,7 @@ impl EmailVerificationRepository {
 
 #[async_trait]
 impl EmailVerificationRepositoryTrait for EmailVerificationRepository {
+    #[instrument(skip(self))]
     async fn create_token(
         &self,
         user_id: Uuid,
@@ -41,6 +43,7 @@ impl EmailVerificationRepositoryTrait for EmailVerificationRepository {
         Ok(verification_token)
     }
 
+    #[instrument(skip(self))]
     async fn find_by_token(
         &self,
         token: &str,
@@ -59,6 +62,7 @@ impl EmailVerificationRepositoryTrait for EmailVerificationRepository {
         Ok(verification_token)
     }
 
+    #[instrument(skip(self))]
     async fn delete_token(&self, token: &str) -> Result<(), sqlx::Error> {
         sqlx::query(
             r#"
@@ -73,6 +77,7 @@ impl EmailVerificationRepositoryTrait for EmailVerificationRepository {
         Ok(())
     }
 
+    #[instrument(skip(self))]
     async fn verify_user_email(&self, user_id: Uuid) -> Result<(), sqlx::Error> {
         sqlx::query(
             r#"

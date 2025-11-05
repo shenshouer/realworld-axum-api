@@ -18,25 +18,32 @@ use crate::{
 };
 use axum::{Json, extract::State, http::StatusCode};
 use chrono::{Duration, Utc};
-use tracing::{error, info};
+use tracing::{error, info, instrument};
 use validator::Validate;
 
+#[instrument(
+    skip(state, payload),
+    fields(username = %payload.user.username, email = %payload.user.email),
+)]
 pub async fn register(
     State(state): State<AppState>,
     Json(payload): Json<RegisterUserRequest>,
 ) -> Result<Json<LoginResponse>, StatusCode> {
     // Validate input data
-    payload
-        .user
-        .validate()
-        .map_err(|_| StatusCode::BAD_REQUEST)?;
+    payload.user.validate().map_err(|err| {
+        error!("Validation error: {:?}", err);
+        StatusCode::BAD_REQUEST
+    })?;
 
     // Check if user already exists
     if state
         .user_repository
         .find_by_email(&payload.user.email)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|err| {
+            error!("Database error: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
         .is_some()
     {
         return Err(StatusCode::CONFLICT);
@@ -46,22 +53,30 @@ pub async fn register(
         .user_repository
         .find_by_username(&payload.user.username)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|err| {
+            error!("Database error: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
         .is_some()
     {
         return Err(StatusCode::CONFLICT);
     }
 
     // Hash the password
-    let password_hash =
-        hash_password(&payload.user.password).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let password_hash = hash_password(&payload.user.password).map_err(|err| {
+        error!("Password hashing error: {:?}", err);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     // Create user in database
     let user = state
         .user_repository
         .create(&payload.user.username, &payload.user.email, &password_hash)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|err| {
+            error!("Database error: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     let verification_token = generate_verification_token();
     let expires_at = Utc::now() + Duration::hours(24);
@@ -72,8 +87,8 @@ pub async fn register(
         .email_verification_repository
         .create_token(user.id, &verification_token, expires_at)
         .await
-        .map_err(|e| {
-            error!("Failed to create token in DB: {:?}", e);
+        .map_err(|err| {
+            error!("Failed to create token in DB: {:?}", err);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
     info!("Token saved to database");
@@ -91,9 +106,14 @@ pub async fn register(
     info!("Email sent successfully");
 
     // Generate JWT token
-    let jwt_secret = std::env::var("JWT_SECRET").map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let access_token =
-        generate_token(&user.id, &jwt_secret).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let jwt_secret = std::env::var("JWT_SECRET").map_err(|err| {
+        error!("JWT secret not found: {}", err);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    let access_token = generate_token(&user.id, &jwt_secret).map_err(|err| {
+        error!("Failed to generate access token: {}", err);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     // Generate refresh token (UUID, no expiration)
     let refresh_token = generate_refresh_token();
@@ -103,7 +123,10 @@ pub async fn register(
         .refresh_token_repository
         .create_token(user.id, &refresh_token)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|err| {
+            error!("Failed to save refresh token to database: {}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     // Build response with BOTH tokens
     let response = LoginResponse {
@@ -117,36 +140,48 @@ pub async fn register(
     Ok(Json(response))
 }
 
+#[instrument(skip(state))]
 pub async fn login(
     State(state): State<AppState>,
     Json(payload): Json<LoginUserRequest>,
 ) -> Result<Json<LoginResponse>, StatusCode> {
     // Validate input
-    payload
-        .user
-        .validate()
-        .map_err(|_| StatusCode::BAD_REQUEST)?;
+    payload.user.validate().map_err(|err| {
+        error!("Invalid login request: {}", err);
+        StatusCode::BAD_REQUEST
+    })?;
 
     // Find user by email
     let user = state
         .user_repository
         .find_by_email(&payload.user.email)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|err| {
+            error!("Failed to find user by email: {}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
         .ok_or(StatusCode::UNAUTHORIZED)?;
 
     // Verify password
-    let password_valid = verify_password(&payload.user.password, &user.password_hash)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let password_valid =
+        verify_password(&payload.user.password, &user.password_hash).map_err(|err| {
+            error!("Failed to verify password: {}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     if !password_valid {
         return Err(StatusCode::UNAUTHORIZED);
     }
 
     // Generate JWT token
-    let jwt_secret = std::env::var("JWT_SECRET").map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let access_token =
-        generate_token(&user.id, &jwt_secret).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let jwt_secret = std::env::var("JWT_SECRET").map_err(|err| {
+        error!("Failed to get JWT secret: {}", err);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    let access_token = generate_token(&user.id, &jwt_secret).map_err(|err| {
+        error!("Failed to generate access token: {}", err);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     // Generate refresh token (UUID, no expiration)
     let refresh_token = generate_refresh_token();
@@ -156,7 +191,10 @@ pub async fn login(
         .refresh_token_repository
         .create_token(user.id, &refresh_token)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|err| {
+            error!("Failed to save refresh token: {}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     // Build response with BOTH tokens
     let response = LoginResponse {
@@ -168,6 +206,7 @@ pub async fn login(
     Ok(Json(response))
 }
 
+#[instrument]
 pub async fn current_user(
     RequireAuth(user): RequireAuth,
 ) -> Result<Json<UserResponse>, StatusCode> {
@@ -179,6 +218,7 @@ pub async fn current_user(
     Ok(Json(response))
 }
 
+#[instrument(skip(state))]
 pub async fn verify_email(
     State(state): State<AppState>,
     axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
@@ -191,7 +231,10 @@ pub async fn verify_email(
         .email_verification_repository
         .find_by_token(token)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|err| {
+            error!("Failed to find email verification token: {}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
         .ok_or(StatusCode::NOT_FOUND)?;
 
     // Check if expired
@@ -201,7 +244,10 @@ pub async fn verify_email(
             .email_verification_repository
             .delete_token(token)
             .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            .map_err(|err| {
+                error!("Failed to delete expired email verification token: {}", err);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
 
         return Err(StatusCode::GONE);
     }
@@ -211,14 +257,20 @@ pub async fn verify_email(
         .email_verification_repository
         .verify_user_email(verification_token.user_id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|err| {
+            error!("Failed to verify user email: {}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     // Delete token (single-use)
     state
         .email_verification_repository
         .delete_token(token)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|err| {
+            error!("Failed to delete email verification token: {}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     Ok(Json(serde_json::json!({
         "message": "Email verified successfully!"
@@ -226,6 +278,7 @@ pub async fn verify_email(
 }
 
 // Handler for "Forgot Password" - generates and emails reset token
+#[instrument(skip(state))]
 pub async fn forgot_password(
     State(state): State<AppState>,
     Json(payload): Json<ForgotPasswordRequest>,
@@ -238,7 +291,10 @@ pub async fn forgot_password(
         .user_repository
         .find_by_email(&payload.email)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|err| {
+            error!("Failed to find user by email: {}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     // SECURITY: Always return success even if email doesn't exist
     // This prevents attackers from discovering which emails are registered
@@ -259,15 +315,18 @@ pub async fn forgot_password(
         .password_reset_repository
         .create_token(user.id, &reset_token, expires_at)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|err| {
+            error!("Failed to create password reset token: {}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     // Send reset email
     state
         .email_service
         .send_password_reset_email(&user.email, &user.username, &reset_token)
         .await
-        .map_err(|e| {
-            eprintln!("Failed to send password reset email: {}", e);
+        .map_err(|err| {
+            error!("Failed to send password reset email: {}", err);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
@@ -277,19 +336,26 @@ pub async fn forgot_password(
 }
 
 // Handler for actually resetting the password
+#[instrument(skip(state))]
 pub async fn reset_password(
     State(state): State<AppState>,
     Json(payload): Json<ResetPasswordRequest>,
 ) -> Result<Json<ResetPasswordResponse>, StatusCode> {
     // Validate new password
-    payload.validate().map_err(|_| StatusCode::BAD_REQUEST)?;
+    payload.validate().map_err(|err| {
+        error!("Failed to validate password reset request: {}", err);
+        StatusCode::BAD_REQUEST
+    })?;
 
     // Look up token
     let reset_token = state
         .password_reset_repository
         .find_by_token(&payload.token)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|err| {
+            error!("Failed to find password reset token: {}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
         .ok_or(StatusCode::NOT_FOUND)?;
 
     // Check expiration
@@ -299,28 +365,39 @@ pub async fn reset_password(
             .password_reset_repository
             .delete_token(&payload.token)
             .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            .map_err(|err| {
+                error!("Failed to delete expired password reset token: {}", err);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
 
         return Err(StatusCode::GONE);
     }
 
     // Hash new password
-    let new_password_hash =
-        hash_password(&payload.new_password).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let new_password_hash = hash_password(&payload.new_password).map_err(|err| {
+        error!("Failed to hash new password: {}", err);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     // Update user password
     state
         .user_repository
         .update_password(reset_token.user_id, &new_password_hash)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|err| {
+            error!("Failed to update user password: {}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     // Delete ALL reset tokens for this user (invalidate any other pending requests)
     state
         .password_reset_repository
         .delete_all_user_tokens(reset_token.user_id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|err| {
+            error!("Failed to delete all user tokens: {}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     Ok(Json(ResetPasswordResponse {
         message: "Password has been reset successfully. You can now login with your new password."
@@ -328,6 +405,7 @@ pub async fn reset_password(
     }))
 }
 
+#[instrument(skip(state))]
 pub async fn refresh_token(
     State(state): State<AppState>,
     Json(payload): Json<RefreshTokenRequest>,
@@ -337,7 +415,10 @@ pub async fn refresh_token(
         .refresh_token_repository
         .find_by_token(&payload.refresh_token)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|err| {
+            error!("Failed to find refresh token: {}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
         .ok_or(StatusCode::UNAUTHORIZED)?;
 
     // Step 2: Check if token has expired
@@ -368,14 +449,20 @@ pub async fn refresh_token(
             .refresh_token_repository
             .delete_all_user_tokens(refresh_token.user_id)
             .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            .map_err(|err| {
+                error!("Failed to delete all user tokens: {}", err);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
 
         // Get user info for email
         let user = state
             .user_repository
             .find_by_id(refresh_token.user_id)
             .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+            .map_err(|err| {
+                error!("Failed to find user: {}", err);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?
             .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
         // Send security alert email
@@ -396,7 +483,10 @@ pub async fn refresh_token(
         .refresh_token_repository
         .mark_token_as_used(&payload.refresh_token)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|err| {
+            error!("Failed to mark token as used: {}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     // Step 5: Generate NEW refresh token with rotation
     let new_refresh_token = generate_refresh_token();
@@ -405,12 +495,17 @@ pub async fn refresh_token(
         .refresh_token_repository
         .create_token(refresh_token.user_id, &new_refresh_token)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|err| {
+            error!("Failed to create new token: {}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     // Step 6: Generate new access token
     let jwt_secret = std::env::var("JWT_SECRET").map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let access_token = generate_token(&refresh_token.user_id, &jwt_secret)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let access_token = generate_token(&refresh_token.user_id, &jwt_secret).map_err(|err| {
+        error!("Failed to generate access token: {}", err);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     // Step 7: Return BOTH tokens
     Ok(Json(RefreshTokenResponse {
@@ -419,6 +514,7 @@ pub async fn refresh_token(
     }))
 }
 
+#[instrument(skip(state))]
 pub async fn logout(
     State(state): State<AppState>,
     Json(payload): Json<LogoutRequest>,
@@ -427,7 +523,10 @@ pub async fn logout(
         .refresh_token_repository
         .delete_token(&payload.refresh_token)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|err| {
+            error!("Failed to delete token: {}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     Ok(Json(LogoutResponse {
         message: "Logged out successfully".to_string(),

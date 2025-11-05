@@ -1,6 +1,7 @@
 use crate::models::User;
 use async_trait::async_trait;
 use sqlx::PgPool;
+use tracing::instrument;
 use uuid::Uuid;
 
 use super::traits::UserRepositoryTrait;
@@ -18,6 +19,7 @@ impl UserRepository {
 
 #[async_trait]
 impl UserRepositoryTrait for UserRepository {
+    #[instrument(skip(self, password_hash))]
     async fn create(
         &self,
         username: &str,
@@ -41,6 +43,7 @@ impl UserRepositoryTrait for UserRepository {
         Ok(user)
     }
 
+    #[instrument(skip(self))]
     async fn find_by_id(&self, id: Uuid) -> Result<Option<User>, sqlx::Error> {
         let user = sqlx::query_as::<_, User>(
             r#"
@@ -57,6 +60,7 @@ impl UserRepositoryTrait for UserRepository {
         Ok(user)
     }
 
+    #[instrument(skip(self))]
     async fn find_by_email(&self, email: &str) -> Result<Option<User>, sqlx::Error> {
         let user = sqlx::query_as::<_, User>(
             r#"
@@ -73,6 +77,7 @@ impl UserRepositoryTrait for UserRepository {
         Ok(user)
     }
 
+    #[instrument(skip(self))]
     async fn find_by_username(&self, username: &str) -> Result<Option<User>, sqlx::Error> {
         let user = sqlx::query_as::<_, User>(
             r#"
@@ -89,6 +94,7 @@ impl UserRepositoryTrait for UserRepository {
         Ok(user)
     }
 
+    #[instrument(skip(self))]
     async fn update(
         &self,
         id: Uuid,
@@ -120,6 +126,7 @@ impl UserRepositoryTrait for UserRepository {
         Ok(user)
     }
 
+    #[instrument(skip(self, new_password_hash))]
     async fn update_password(
         &self,
         user_id: Uuid,

@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
+use tracing::instrument;
 use uuid::Uuid;
 
 use super::traits::PasswordResetRepositoryTrait;
@@ -19,6 +20,7 @@ impl PasswordResetRepository {
 
 #[async_trait]
 impl PasswordResetRepositoryTrait for PasswordResetRepository {
+    #[instrument(skip(self))]
     async fn create_token(
         &self,
         user_id: Uuid,
@@ -41,6 +43,7 @@ impl PasswordResetRepositoryTrait for PasswordResetRepository {
         Ok(reset_token)
     }
 
+    #[instrument(skip(self))]
     async fn find_by_token(&self, token: &str) -> Result<Option<PasswordResetToken>, sqlx::Error> {
         let reset_token = sqlx::query_as::<_, PasswordResetToken>(
             r#"
@@ -56,6 +59,7 @@ impl PasswordResetRepositoryTrait for PasswordResetRepository {
         Ok(reset_token)
     }
 
+    #[instrument(skip(self))]
     async fn delete_token(&self, token: &str) -> Result<(), sqlx::Error> {
         sqlx::query(
             r#"
@@ -70,6 +74,7 @@ impl PasswordResetRepositoryTrait for PasswordResetRepository {
         Ok(())
     }
 
+    #[instrument(skip(self))]
     async fn delete_all_user_tokens(&self, user_id: Uuid) -> Result<(), sqlx::Error> {
         sqlx::query(
             r#"
