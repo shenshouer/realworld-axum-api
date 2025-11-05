@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::metrics::Metrics;
 use crate::repositories::{
     EmailVerificationRepository, EmailVerificationRepositoryTrait, PasswordResetRepository,
     PasswordResetRepositoryTrait, RefreshTokenRepository, RefreshTokenRepositoryTrait,
@@ -18,10 +19,11 @@ pub struct AppState {
     pub password_reset_repository: Arc<dyn PasswordResetRepositoryTrait>,
     pub refresh_token_repository: Arc<dyn RefreshTokenRepositoryTrait>,
     pub email_service: Arc<EmailService>,
+    pub metrics: Option<Metrics>,
 }
 
 impl AppState {
-    pub async fn new(database_url: &str) -> Result<Self, sqlx::Error> {
+    pub async fn new(database_url: &str, metrics: Option<Metrics>) -> Result<Self, sqlx::Error> {
         // Create the database connection pool
         let db = PgPool::connect(database_url).await?;
 
@@ -56,6 +58,7 @@ impl AppState {
             password_reset_repository,
             refresh_token_repository,
             email_service,
+            metrics,
         })
     }
 }

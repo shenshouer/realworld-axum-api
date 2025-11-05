@@ -6,6 +6,7 @@ use opentelemetry_otlp::{ExporterBuildError, WithExportConfig, WithTonicConfig};
 use opentelemetry_sdk::{
     Resource,
     logs::SdkLoggerProvider,
+    metrics::SdkMeterProvider,
     trace::{self, RandomIdGenerator, Sampler, SdkTracerProvider},
 };
 use smallvec::SmallVec;
@@ -16,13 +17,17 @@ use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 const SERVICE_NAME: &str = "realworld-axum-api";
 
-pub fn init_tracing(logger_level: Option<String>, endpoint: Option<String>, token: Option<String>) {
+pub fn init_tracing(
+    logger_level: Option<String>,
+    endpoint: Option<String>,
+    token: Option<String>,
+) -> Result<Option<SdkMeterProvider>, ExporterBuildError> {
     let logger_level = logger_level.unwrap_or("info".to_owned());
     let (endpoint, token) = match (endpoint, token) {
         (Some(endpoint), Some(token)) => (endpoint, token),
         _ => {
             warn!("No endpoint or token provided, tracing will not be enabled");
-            return;
+            return Ok(None);
         }
     };
     let logger_provider = init_logger_provider(&endpoint, &token).unwrap();
@@ -56,6 +61,9 @@ pub fn init_tracing(logger_level: Option<String>, endpoint: Option<String>, toke
     } else {
         registry.init();
     }
+
+    let meter_provider = init_metrics_provider(&endpoint, &token)?;
+    Ok(Some(meter_provider))
 }
 
 fn get_resource() -> Resource {
@@ -136,4 +144,22 @@ fn build_env_filter(logger_level: &str, default_level: Option<&str>) -> EnvFilte
         }
     }
     filter
+}
+
+fn init_metrics_provider(
+    endpoint: &str,
+    token: &str,
+) -> Result<SdkMeterProvider, ExporterBuildError> {
+    let exporter = opentelemetry_otlp::MetricExporterBuilder::new()
+        .with_tonic()
+        .with_endpoint(endpoint)
+        .with_metadata(get_metadata(token))
+        .build()?;
+    let meter_provider = SdkMeterProvider::builder()
+        .with_resource(get_resource())
+        .with_periodic_exporter(exporter)
+        .build();
+
+    global::set_meter_provider(meter_provider.clone());
+    Ok(meter_provider)
 }

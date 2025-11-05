@@ -48,7 +48,7 @@ lettre = { version = "0.11", features = ["tokio1-native-tls", "builder", "hostna
 askama = "0.14"
 tower = "0.5"
 tower-http = { version = "0.6", features = ["trace", "compression-gzip", "compression-br", "cors", "sensitive-headers"] }
-thiserror = "2.0.17"
+thiserror = "2"
 strum = { version = "0.27", features = ["derive"] }
 displaydoc = "0.2"
 pretty-error-debug = "0.3"
@@ -58,3 +58,4 @@ opentelemetry_sdk = "0.31"
 opentelemetry-appender-tracing = "0.31"
 smallvec = "1.15.1"
 tonic = "0.14.2"
+prometheus = "0.14.0"

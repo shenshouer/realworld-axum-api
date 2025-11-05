@@ -1,7 +1,9 @@
 use crate::{auth::jwt::validate_token, models::User, state::AppState};
 use axum::{
-    extract::{FromRef, FromRequestParts},
+    extract::{FromRef, FromRequestParts, Request, State},
     http::{HeaderMap, StatusCode, request::Parts},
+    middleware::Next,
+    response::Response,
 };
 use tracing::error;
 use uuid::Uuid;
@@ -115,4 +117,19 @@ fn extract_token_from_headers(headers: &HeaderMap) -> Option<String> {
     } else {
         None
     }
+}
+
+pub async fn track_metrics(State(state): State<AppState>, req: Request, next: Next) -> Response {
+    let path = req.uri().path().to_string();
+    let method = req.method().clone();
+
+    // 等待请求处理完成
+    let response = next.run(req).await;
+
+    // 从 AppState 中获取 metrics 并记录数据
+    if let Some(metrics) = &state.metrics {
+        metrics.record_http_request(method.as_str(), &path);
+    }
+
+    response
 }
