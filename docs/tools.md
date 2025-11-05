@@ -22,6 +22,7 @@ sqlx migrate run
 ## openobserve
 
 ```
+docker rm openobserve
 docker run --name openobserve \
   -v $PWD/data:/data \
   -e ZO_DATA_DIR="/data" \
