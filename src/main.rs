@@ -43,9 +43,11 @@ async fn handle_timeout_error(err: BoxError) -> (axum::http::StatusCode, String)
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     dotenvy::dotenv().ok();
-    let endpoint = "http://localhost:5081";
-    let logger_level = "info";
-    otlp::init_tracing(logger_level, endpoint);
+    let endpoint = env::var("OLTP_ENDPOINT").ok();
+    let token = env::var("OLTP_TOKEN").ok();
+
+    let logger_level = Some("info".to_owned());
+    otlp::init_tracing(logger_level, endpoint, token);
 
     let database_url =
         env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env file or environment");
