@@ -3,6 +3,7 @@ use axum::{
     extract::{FromRef, FromRequestParts},
     http::{HeaderMap, StatusCode, request::Parts},
 };
+use tracing::error;
 use uuid::Uuid;
 
 // For protected routes - requires valid JWT
@@ -26,19 +27,33 @@ where
         let token = extract_token_from_headers(headers).ok_or(StatusCode::UNAUTHORIZED)?;
 
         // Validate JWT token
-        let jwt_secret =
-            std::env::var("JWT_SECRET").map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let jwt_secret = std::env::var("JWT_SECRET").map_err(|err| {
+            error!("Failed to retrieve JWT_SECRET in RequireAuth: {}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
-        let claims = validate_token(&token, &jwt_secret).map_err(|_| StatusCode::UNAUTHORIZED)?;
+        let claims = validate_token(&token, &jwt_secret).map_err(|err| {
+            error!("Failed to validate JWT token in RequireAuth: {}", err);
+            StatusCode::UNAUTHORIZED
+        })?;
 
         // Get user from database
-        let user_id = Uuid::parse_str(&claims.sub).map_err(|_| StatusCode::UNAUTHORIZED)?;
+        let user_id = Uuid::parse_str(&claims.sub).map_err(|err| {
+            error!(
+                "Failed to parse user ID from JWT token in RequireAuth: {}",
+                err
+            );
+            StatusCode::UNAUTHORIZED
+        })?;
 
         let user = app_state
             .user_repository
             .find_by_id(user_id)
             .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+            .map_err(|err| {
+                error!("Failed to find user by ID in RequireAuth: {}", err);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?
             .ok_or(StatusCode::UNAUTHORIZED)?;
 
         Ok(RequireAuth(user))
@@ -63,8 +78,10 @@ where
         };
 
         // Try to validate JWT token
-        let jwt_secret =
-            std::env::var("JWT_SECRET").map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let jwt_secret = std::env::var("JWT_SECRET").map_err(|err| {
+            error!("Failed to get JWT secret in OptionalAuth: {}", err);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
         let claims = match validate_token(&token, &jwt_secret) {
             Ok(claims) => claims,
@@ -81,7 +98,10 @@ where
             .user_repository
             .find_by_id(user_id)
             .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            .map_err(|err| {
+                error!("Failed to find user by ID in OptionalAuth: {}", err);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
 
         Ok(OptionalAuth(user))
     }
